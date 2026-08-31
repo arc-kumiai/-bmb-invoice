@@ -496,8 +496,11 @@ function InvoiceMaker() {
   const stampRef = useRef(null);
   const importRef = useRef(null);
   const paperRef = useRef(null);
-  const [pageCount, setPageCount] = useState(1);
-  const [onePage, setOnePage] = useState(true);
+  const [printInfo, setPrintInfo] = useState({
+    mm: 0,
+    pages: 1,
+    one: true
+  });
   const timer = useRef(null);
   const flash = msg => {
     setStatus(msg);
@@ -636,8 +639,8 @@ function InvoiceMaker() {
     flash("新しい請求書を作成しました");
   };
 
-  /* 印刷時のフッター。位置は position:fixed なので本文の高さに影響せず、
-     余分なページを生まない。枚数だけを本文の高さから見積もる */
+  /* 印刷時の高さを実測する。1ページに収まるなら印刷対象の高さを1ページ分で打ち切り、
+     余分なページが出ないようにする。フッターは position:fixed なので高さに影響しない */
   useEffect(() => {
     const build = () => {
       const paper = paperRef.current;
@@ -647,16 +650,30 @@ function InvoiceMaker() {
       document.body.appendChild(probe);
       const mm = probe.getBoundingClientRect().height / 100 || 96 / 25.4;
       probe.remove();
-      const pageH = (297 - 13 - 16) * mm; // A4 から上下の余白を引いた印字領域
-      // 画面にしか出ない要素と、画面用の内側余白を引いて印刷時の高さに近づける
-      const hidden = [...paper.querySelectorAll(".phide")].reduce((h, el) => h + el.offsetHeight + 10, 0);
-      const contentH = paper.scrollHeight - hidden - 25 * mm;
-      setPageCount(Math.max(1, Math.ceil((contentH - 4) / pageH)));
-      setOnePage(contentH < pageH * 0.9); // 明らかに1枚に収まる場合だけ高さを固定する
+      const cs = window.getComputedStyle(paper);
+      const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      // 画面にしか出ない要素（余白込み）の高さを差し引く
+      const hidden = [...paper.querySelectorAll(".phide")].reduce((h, el) => {
+        const m = window.getComputedStyle(el);
+        return h + el.getBoundingClientRect().height + parseFloat(m.marginTop) + parseFloat(m.marginBottom);
+      }, 0);
+      const pageH = (297 - 13 - 16) * mm; // A4 の印字領域
+      const contentH = paper.getBoundingClientRect().height - pad - hidden;
+      setPrintInfo({
+        mm: Math.round(contentH / mm),
+        pages: Math.max(1, Math.ceil((contentH - 4) / pageH)),
+        one: contentH <= pageH - 5 * mm
+      });
     };
     build();
+    const t = setTimeout(build, 300); // 画像や自動伸縮の反映待ち
     window.addEventListener("beforeprint", build);
-    return () => window.removeEventListener("beforeprint", build);
+    window.addEventListener("resize", build);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("beforeprint", build);
+      window.removeEventListener("resize", build);
+    };
   }, [items, to, me, meta]);
 
   /* --- 当社名の切り替え --- */
@@ -919,7 +936,7 @@ function InvoiceMaker() {
     }
   }, children));
   return /*#__PURE__*/React.createElement("div", {
-    className: onePage ? "bmb onepage" : "bmb"
+    className: printInfo.one ? "bmb onepage" : "bmb"
   }, /*#__PURE__*/React.createElement("style", null, css), /*#__PURE__*/React.createElement("div", {
     className: "bar no-print",
     style: {
@@ -990,7 +1007,12 @@ function InvoiceMaker() {
       color: "var(--teal-d)",
       letterSpacing: ".04em"
     }
-  }, status)), /*#__PURE__*/React.createElement("div", {
+  }, status), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      color: "#8b9aa2"
+    }
+  }, "印刷 ", printInfo.pages, "ページ（本文 約", printInfo.mm, "mm", printInfo.one ? "・1枚に固定" : "", "）")), /*#__PURE__*/React.createElement("div", {
     className: "bar no-print"
   }, /*#__PURE__*/React.createElement("button", {
     className: "btn btn-main",
@@ -1623,7 +1645,7 @@ function InvoiceMaker() {
     }
   }, num(totals.total)))))), /*#__PURE__*/React.createElement("div", {
     className: "pfoot"
-  }, pageCount > 1 ? `全 ${pageCount} ページ` : "1 / 1")));
+  }, printInfo.pages > 1 ? `全 ${printInfo.pages} ページ` : "1 / 1")));
 }
   ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(InvoiceMaker));
 } catch (err) {
