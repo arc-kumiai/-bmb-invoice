@@ -496,10 +496,8 @@ function InvoiceMaker() {
   const stampRef = useRef(null);
   const importRef = useRef(null);
   const paperRef = useRef(null);
-  const [pageMarks, setPageMarks] = useState({
-    total: 1,
-    tops: []
-  });
+  const [pageCount, setPageCount] = useState(1);
+  const [onePage, setOnePage] = useState(true);
   const timer = useRef(null);
   const flash = msg => {
     setStatus(msg);
@@ -638,8 +636,8 @@ function InvoiceMaker() {
     flash("新しい請求書を作成しました");
   };
 
-  /* 印刷時のページ番号。最終ページ分は本文の直後（通常の流れ）に置き、
-     本文より下へ要素がはみ出さないようにする＝空白ページを作らない */
+  /* 印刷時のフッター。位置は position:fixed なので本文の高さに影響せず、
+     余分なページを生まない。枚数だけを本文の高さから見積もる */
   useEffect(() => {
     const build = () => {
       const paper = paperRef.current;
@@ -649,15 +647,12 @@ function InvoiceMaker() {
       document.body.appendChild(probe);
       const mm = probe.getBoundingClientRect().height / 100 || 96 / 25.4;
       probe.remove();
-      const pageH = (297 - 13 - 14) * mm; // A4 から上下の余白を引いた印字領域
-      const contentH = paper.scrollHeight || 0;
-      const total = Math.max(1, Math.ceil((contentH - 4) / pageH));
-      setPageMarks({
-        total,
-        tops: Array.from({
-          length: total - 1
-        }, (_, i) => (i + 1) * pageH - 10 * mm)
-      });
+      const pageH = (297 - 13 - 16) * mm; // A4 から上下の余白を引いた印字領域
+      // 画面にしか出ない要素と、画面用の内側余白を引いて印刷時の高さに近づける
+      const hidden = [...paper.querySelectorAll(".phide")].reduce((h, el) => h + el.offsetHeight + 10, 0);
+      const contentH = paper.scrollHeight - hidden - 25 * mm;
+      setPageCount(Math.max(1, Math.ceil((contentH - 4) / pageH)));
+      setOnePage(contentH < pageH * 0.9); // 明らかに1枚に収まる場合だけ高さを固定する
     };
     build();
     window.addEventListener("beforeprint", build);
@@ -888,15 +883,16 @@ function InvoiceMaker() {
       .paper { box-shadow:none; width:auto; max-width:none; padding:0; border:0; }
       .parties { margin-top:26px !important; }
       .paper > *:last-child { margin-bottom:0 !important; }
-      .pfoot { display:block; position:absolute; left:0; right:0; text-align:center;
+      .pfoot { display:block; position:fixed; left:0; right:0; bottom:0; text-align:center;
                font-size:9px; color:var(--soft); letter-spacing:.1em; }
-      .pfoot-end { position:static; margin-top:10px; break-after:avoid; page-break-after:avoid; }
+      /* 1枚に収まるときは印刷対象の高さを1ページ分で打ち切り、空白ページを防ぐ */
+      .onepage { height:262mm; overflow:hidden; }
       .paper, .bmb, #root, body { break-after:avoid; page-break-after:avoid; }
       .f, .f:hover, .f:focus { background:transparent !important; border-bottom-color:transparent !important; }
       .f::placeholder { color:transparent !important; }
       .sel { border-color:transparent; }
     }
-    @page { size:A4; margin:13mm 13mm 14mm; }
+    @page { size:A4; margin:13mm 13mm 16mm; }
   `;
 
   /* 小さなラベル付き1行 */
@@ -923,7 +919,7 @@ function InvoiceMaker() {
     }
   }, children));
   return /*#__PURE__*/React.createElement("div", {
-    className: "bmb"
+    className: onePage ? "bmb onepage" : "bmb"
   }, /*#__PURE__*/React.createElement("style", null, css), /*#__PURE__*/React.createElement("div", {
     className: "bar no-print",
     style: {
@@ -1107,7 +1103,7 @@ function InvoiceMaker() {
       no: e.target.value
     })
   }))))), /*#__PURE__*/React.createElement("div", {
-    className: "no-print",
+    className: "no-print phide",
     style: {
       display: "flex",
       gap: 8,
@@ -1561,7 +1557,7 @@ function InvoiceMaker() {
     title: "この行を削除",
     onClick: () => setItems(r => r.filter(x => x.id !== it.id))
   }, "×")))))), /*#__PURE__*/React.createElement("button", {
-    className: "btn no-print",
+    className: "btn no-print phide",
     style: {
       marginTop: 10
     },
@@ -1625,15 +1621,9 @@ function InvoiceMaker() {
       fontSize: 15,
       fontWeight: 700
     }
-  }, num(totals.total)))))), pageMarks.tops.map((top, i) => /*#__PURE__*/React.createElement("div", {
-    key: i,
-    className: "pfoot",
-    style: {
-      top
-    }
-  }, i + 1, " / ", pageMarks.total)), /*#__PURE__*/React.createElement("div", {
-    className: "pfoot pfoot-end"
-  }, pageMarks.total, " / ", pageMarks.total)));
+  }, num(totals.total)))))), /*#__PURE__*/React.createElement("div", {
+    className: "pfoot"
+  }, pageCount > 1 ? `全 ${pageCount} ページ` : "1 / 1")));
 }
   ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(InvoiceMaker));
 } catch (err) {
