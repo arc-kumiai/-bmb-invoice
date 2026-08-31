@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>印刷テスト</title>
+<style>
+  html, body { margin:0; padding:0; }
+  .box { margin:0; padding:20mm; font-family:sans-serif; }
+  h1 { font-size:20px; margin:0 0 12px; }
+  .fill { height:120mm; border:2px solid #12a0b8; border-radius:6px;
+          display:flex; align-items:center; justify-content:center; color:#12a0b8; }
+  @page { size:A4; margin:13mm; }
+</style>
+</head>
+<body>
+  <div class="box">
+    <h1>印刷テスト（このファイルには JavaScript もページ番号もありません）</h1>
+    <p>このページを Ctrl+P で印刷プレビューしてください。プレビューが「1/1」なら Chrome は正常です。
+       「1/2」と表示され2枚目が空白なら、原因は請求書アプリではなく Chrome かプリンタ側の設定です。</p>
+    <div class="fill">内容はここまで（高さ120mm）</div>
+  </div>
+</body>
+</html>
