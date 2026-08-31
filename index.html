@@ -1,0 +1,753 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>請求書作成｜合同会社BMB</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  html, body { margin:0; padding:0; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useEffect, useLayoutEffect, useMemo, useRef, useState } = React;
+
+/* ------------------------------------------------------------------ *
+ *  請求書作成アプリ（モックアップ）
+ *  合同会社BMB
+ *  金額はすべて税抜きで入力し、末尾で消費税10%を加算します
+ * ------------------------------------------------------------------ */
+
+/* 保存領域。この端末のブラウザ（localStorage）に保存します */
+const K = { inv: "bmb:invoices", cus: "bmb:customers", brand: "bmb:brand" };
+const store = {
+  async get(key) {
+    try {
+      const v = localStorage.getItem(key);
+      return v ? JSON.parse(v) : null;
+    } catch (e) { return null; }
+  },
+  async set(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (e) { return false; }  // 容量超過など
+  },
+};
+
+/* 社判。差し替えは上部の「社判を変更」から */
+const STAMP_BMB = "data:image/png;base64,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";
+
+const STAMP_AI = "data:image/png;base64,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";
+
+/* 当社名の切り替え。社名と社判がセットで変わります */
+const PROFILES = [
+  { key: "bmb", name: "合同会社BMB", stamp: STAMP_BMB },
+  { key: "ai", name: "Ai Ohkuboオータンダヴィ", stamp: STAMP_AI },
+];
+
+const TAX_RATE = 0.1;
+
+const yen = (n) => "¥" + Math.round(Number(n) || 0).toLocaleString("ja-JP");
+const num = (n) => Math.round(Number(n) || 0).toLocaleString("ja-JP");
+/* 入力欄でも桁区切りを表示する（値引きのマイナス入力も可） */
+const fmtInput = (v) => {
+  if (v === "" || v === "-") return v;
+  const n = Number(v);
+  return Number.isNaN(n) ? v : n.toLocaleString("ja-JP");
+};
+
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+const jpDate = (iso) => {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) return iso;
+  return `${y}年${Number(m)}月${Number(d)}日`;
+};
+
+let seq = 100;
+const newRow = () => ({
+  id: ++seq, tag: "", detail: "", work: "", amount: "",
+});
+
+/* 内容量に応じて高さが伸びる入力欄（文字が隠れないように） */
+function AutoText({ value, onChange, placeholder, size = 11 }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  }, [value, size]);
+  return (
+    <textarea ref={ref} rows={1} className="f" value={value} placeholder={placeholder} onChange={onChange}
+              style={{ fontSize: size, lineHeight: 1.55, resize: "none", overflow: "hidden", display: "block" }} />
+  );
+}
+
+function InvoiceMaker() {
+  const [logo, setLogo] = useState(null);
+  const [stamp, setStamp] = useState(STAMP_BMB);
+  const [profileKey, setProfileKey] = useState("bmb");
+
+  const [meta, setMeta] = useState({
+    no: "BMB-2026-0093",
+    issued: today(),
+    due: "2026-09-30",
+    subject: "霞ケ丘ビル4F ラウンジ改装 一式",
+  });
+
+  const [to, setTo] = useState({
+    company: "株式会社ふじみ野建設",
+    honorific: "御中",
+    person: "工務部　斉藤 健一",
+    zip: "〒356-0006",
+    address: "埼玉県ふじみ野市霞ケ丘1-2-25 霞ケ丘ビル4F",
+    tel: "049-000-0000",
+  });
+
+  const [me, setMe] = useState({
+    name: "合同会社BMB",
+    zip: "〒356-0004",
+    address: "埼玉県ふじみ野市上福岡3-14-12",
+    tel: "049-XXX-XXXX",
+    regNo: "T0000000000000",
+    bank: "みずほ銀行 上福岡支店 普通 1234567　名義：ゴウドウガイシャビーエムビー",
+    note: "上記の通りご請求申し上げます。振込手数料は御社にてご負担をお願いいたします。",
+  });
+
+  const [items, setItems] = useState([
+    { id: 1, tag: "A-101", detail: "グレージュ／サンゲツ SP-2842／撥水・防汚加工、リピート小、施工後の色ムラが出にくい不燃認定品",
+      work: "下地補修のうえ貼替え", amount: "153600" },
+    { id: 2, tag: "A-102", detail: "シャンパンゴールド／オーデリック OL291ignore／調光調色・リモコン付、電球色〜昼白色、連続調光対応",
+      work: "既存撤去・新規取付", amount: "228000" },
+    { id: 3, tag: "B-004", detail: "オフホワイト／TOSO／遮光1級・電動レール、リモコン2ch、タイマー開閉対応",
+      work: "採寸・取付・調整", amount: "208000" },
+    { id: 4, tag: "B-007", detail: "ブラッシュピンク／カリモク家具／本革張り、脚部ブラックチェリー材オイル仕上げ",
+      work: "搬入・組立・設置", amount: "192000" },
+    { id: 5, tag: "", detail: "産業廃棄物処分（マニフェスト有）",
+      work: "積込・運搬・処分", amount: "36000" },
+  ]);
+
+  const [invoices, setInvoices] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [currentId, setCurrentId] = useState(null);
+  const [status, setStatus] = useState("");
+
+  const logoRef = useRef(null);
+  const stampRef = useRef(null);
+  const importRef = useRef(null);
+  const timer = useRef(null);
+
+  const flash = (msg) => {
+    setStatus(msg);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setStatus(""), 2600);
+  };
+
+  /* 起動時に保存済みデータを読み込む */
+  useEffect(() => {
+    (async () => {
+      const [inv, cus, brand] = await Promise.all([store.get(K.inv), store.get(K.cus), store.get(K.brand)]);
+      if (Array.isArray(inv)) setInvoices(inv);
+      if (Array.isArray(cus)) setCustomers(cus);
+      if (brand) {
+        if (brand.profileKey) setProfileKey(brand.profileKey);
+        if (brand.logo) setLogo(brand.logo);
+        if (brand.stamp) setStamp(brand.stamp);
+        if (brand.me) setMe((m) => ({ ...m, ...brand.me }));
+      }
+    })();
+    return () => clearTimeout(timer.current);
+  }, []);
+
+  /* --- 請求書 --- */
+  const currentDoc = invoices.find((x) => x.id === currentId) || null;
+
+  const defaultName = () =>
+    [meta.no, to.company, meta.subject].filter(Boolean).join("　") || "無題の請求書";
+
+  /* asNew を true にすると別名で新しい1件として保存します */
+  const saveInvoice = async (asNew) => {
+    let name = currentDoc ? currentDoc.name : "";
+    if (asNew || !currentId || !name) {
+      const input = window.prompt("保存する名前を入力してください", asNew ? "" : (name || defaultName()));
+      if (input === null) return;
+      name = input.trim() || defaultName();
+    }
+    const id = asNew || !currentId ? `inv-${Date.now()}` : currentId;
+    const doc = { id, name, meta, to, items, savedAt: new Date().toISOString() };
+    const next = [doc, ...invoices.filter((x) => x.id !== id)];
+    setInvoices(next);
+    setCurrentId(id);
+    const ok = await store.set(K.inv, next);
+    await store.set(K.brand, { logo, stamp, me, profileKey });
+    flash(ok ? `「${name}」を保存しました` : "この画面を閉じるまでの一時保存になります");
+  };
+
+  const renameInvoice = async () => {
+    if (!currentDoc) return;
+    const input = window.prompt("名前を変更", currentDoc.name || defaultName());
+    if (input === null) return;
+    const name = input.trim() || defaultName();
+    const next = invoices.map((x) => (x.id === currentDoc.id ? { ...x, name } : x));
+    setInvoices(next);
+    await store.set(K.inv, next);
+    flash("名前を変更しました");
+  };
+
+  const openInvoice = (id) => {
+    const d = invoices.find((x) => x.id === id);
+    if (!d) { setCurrentId(null); return; }
+    setMeta(d.meta);
+    setTo(d.to);
+    setItems(d.items);
+    setCurrentId(d.id);
+    flash("読み込みました");
+  };
+
+  const deleteInvoice = async () => {
+    const d = invoices.find((x) => x.id === currentId);
+    if (!d) return;
+    if (!window.confirm(`「${d.name || d.meta.no || "無題"}」を削除します。よろしいですか？`)) return;
+    const next = invoices.filter((x) => x.id !== d.id);
+    setInvoices(next);
+    setCurrentId(null);
+    await store.set(K.inv, next);
+    flash("削除しました");
+  };
+
+  /* 保存済みの1件を下敷きにして新しい請求書を起こす */
+  const copyInvoice = (id) => {
+    const d = invoices.find((x) => x.id === id);
+    if (!d) return;
+    const y = new Date().getFullYear();
+    setTo({ ...d.to });
+    setItems(d.items.map((it) => ({ ...it, id: ++seq })));
+    setMeta({
+      ...d.meta,
+      no: `BMB-${y}-${String(invoices.length + 1).padStart(4, "0")}`,
+      issued: today(),
+      due: "",
+    });
+    setCurrentId(null);
+    flash(`「${d.name || d.meta.no}」をコピーしました`);
+  };
+
+  const newInvoice = () => {
+    const y = new Date().getFullYear();
+    setMeta({ no: `BMB-${y}-${String(invoices.length + 1).padStart(4, "0")}`, issued: today(), due: "", subject: "" });
+    setTo({ company: "", honorific: "御中", person: "", zip: "", address: "", tel: "" });
+    setItems([newRow(), newRow(), newRow()]);
+    setCurrentId(null);
+    flash("新しい請求書を作成しました");
+  };
+
+  /* --- 当社名の切り替え --- */
+  const switchProfile = async (key) => {
+    const p = PROFILES.find((x) => x.key === key);
+    if (!p) return;
+    const nextMe = { ...me, name: p.name };
+    setProfileKey(key);
+    setStamp(p.stamp);
+    setMe(nextMe);
+    await store.set(K.brand, { logo, stamp: p.stamp, me: nextMe, profileKey: key });
+    flash(p.name + " に切り替えました");
+  };
+
+  /* --- バックアップ --- */
+  const exportAll = async () => {
+    const data = {
+      app: "bmb-invoice", version: 1, exportedAt: new Date().toISOString(),
+      invoices, customers, brand: { logo, stamp, me },
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `請求書バックアップ_${today()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    flash("バックアップを書き出しました");
+  };
+
+  const importAll = (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = async () => {
+      try {
+        const d = JSON.parse(r.result);
+        if (d.app !== "bmb-invoice") throw new Error("形式が違います");
+        if (!window.confirm("現在の保存内容をこのバックアップで置き換えます。よろしいですか？")) return;
+        const inv = Array.isArray(d.invoices) ? d.invoices : [];
+        const cus = Array.isArray(d.customers) ? d.customers : [];
+        setInvoices(inv); setCustomers(cus); setCurrentId(null);
+        await store.set(K.inv, inv);
+        await store.set(K.cus, cus);
+        if (d.brand) {
+          if (d.brand.logo) setLogo(d.brand.logo);
+          if (d.brand.stamp) setStamp(d.brand.stamp);
+          if (d.brand.me) setMe((m) => ({ ...m, ...d.brand.me }));
+          await store.set(K.brand, d.brand);
+        }
+        flash("バックアップを読み込みました");
+      } catch (err) {
+        flash("読み込めませんでした：" + err.message);
+      }
+    };
+    r.readAsText(f);
+  };
+
+  /* --- 請求先 --- */
+  const saveCustomer = async () => {
+    if (!to.company.trim()) { flash("請求先名を入力してください"); return; }
+    const hit = customers.find((c) => c.company === to.company);
+    const c = { ...to, id: hit ? hit.id : `cus-${Date.now()}` };
+    const next = [c, ...customers.filter((x) => x.id !== c.id)];
+    setCustomers(next);
+    await store.set(K.cus, next);
+    flash(hit ? "請求先を上書きしました" : "請求先を保存しました");
+  };
+
+  const pickCustomer = (id) => {
+    const c = customers.find((x) => x.id === id);
+    if (!c) return;
+    setTo({ company: c.company, honorific: c.honorific || "御中", person: c.person || "",
+            zip: c.zip || "", address: c.address || "", tel: c.tel || "" });
+  };
+
+  const deleteCustomer = async () => {
+    const hit = customers.find((c) => c.company === to.company);
+    if (!hit) { flash("この請求先は保存されていません"); return; }
+    if (!window.confirm(`請求先「${hit.company}」を保存先から削除します。よろしいですか？`)) return;
+    const next = customers.filter((x) => x.id !== hit.id);
+    setCustomers(next);
+    await store.set(K.cus, next);
+    flash("請求先を削除しました");
+  };
+
+  const pickImage = (e, setter) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      setter(r.result);
+      store.get(K.brand).then((b) => store.set(K.brand, { ...(b || {}), ...(setter === setLogo ? { logo: r.result } : { stamp: r.result }), me, profileKey }));
+    };
+    r.readAsDataURL(f);
+    e.target.value = "";
+  };
+
+  const amountOf = (it) => Number(it.amount) || 0;
+
+  const setItem = (id, key, val) =>
+    setItems((rows) => rows.map((r) => (r.id === id ? { ...r, [key]: val } : r)));
+
+  const totals = useMemo(() => {
+    const sub = items.reduce((s, it) => s + amountOf(it), 0);
+    const tax = Math.floor(sub * TAX_RATE);
+    return { sub, tax, total: sub + tax };
+  }, [items]);
+
+  const css = `
+    .bmb { --ink:#2c3b41; --soft:#6e8a92; --teal:#12a0b8; --teal-d:#0b7f95;
+           --aqua:#e9f5f8; --aqua2:#cfe8ef; --line:#8fcedd; }
+    .bmb *, .bmb *::before, .bmb *::after { box-sizing:border-box; }
+    .bmb { background:#eef2f4; min-height:100vh; padding:28px 16px 64px; color:var(--ink);
+           font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","YuGothic","Noto Sans JP","Meiryo",sans-serif;
+           font-feature-settings:"palt" 1; -webkit-font-smoothing:antialiased; }
+    .paper { width:210mm; max-width:100%; margin:0 auto; background:#fff; padding:13mm 14mm 12mm;
+             border:1px solid var(--line); border-radius:8px;
+             box-shadow:0 1px 3px rgba(20,60,70,.08), 0 16px 40px rgba(20,60,70,.12); }
+    .f { font:inherit; color:inherit; background:transparent; border:0; border-bottom:1px solid transparent;
+         padding:1px 3px; width:100%; border-radius:3px; transition:background .15s ease; }
+    .f:hover { background:#f2fafc; }
+    .f:focus { outline:none; background:var(--aqua); border-bottom-color:var(--teal); }
+    .f::placeholder { color:#a9c4cc; }
+    input[type="date"].f::-webkit-datetime-edit { text-align:right; }
+    textarea.f { resize:vertical; line-height:1.7; }
+    .num { text-align:right; font-variant-numeric:tabular-nums; letter-spacing:.03em; }
+    .lbl { color:var(--soft); letter-spacing:.06em; }
+    .meta { font-size:10.5px; line-height:1.75; }
+
+    /* 見出しラベル（右端が矢羽根状のリボン） */
+    .tag { display:inline-block; flex:none; background:var(--teal); color:#fff; font-size:10.5px;
+           font-weight:500; letter-spacing:.12em; line-height:1.6; padding:3px 17px 3px 11px;
+           clip-path:polygon(0 0, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, 0 100%);
+           -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .box { border:1.5px solid var(--line); border-radius:6px; padding:5px 10px; background:#fff; }
+
+    .tbl { width:100%; border-collapse:collapse; font-size:12px; border:1px solid var(--line); }
+    .tbl thead th { background:var(--teal); color:#fff; font-weight:600; font-size:11px; letter-spacing:.12em;
+                    text-align:center; padding:6px; border-right:1px solid rgba(255,255,255,.45);
+                    -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .tbl thead th:last-child { border-right:0; }
+    .tbl td { border-bottom:1px solid var(--aqua2); border-right:1px solid var(--aqua2);
+              padding:6px; vertical-align:top; }
+    .tbl td:last-child { border-right:0; }
+    .tbl tbody tr:nth-child(even) td { background:var(--aqua);
+              -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+
+    .sum-l { background:var(--aqua); color:var(--teal-d); border:1px solid var(--line);
+             padding:7px 10px; letter-spacing:.28em; text-align:center;
+             -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .sum-v { border:1px solid var(--line); padding:7px 12px; }
+
+    .sel { font:inherit; color:inherit; background:transparent; border:1px solid var(--aqua2);
+           border-radius:4px; padding:2px 6px; width:100%; }
+    .sel:focus { outline:none; border-color:var(--teal); background:var(--aqua); }
+    .btn { font:inherit; font-size:12px; letter-spacing:.05em; border:1px solid var(--line); background:#fff;
+           color:var(--teal-d); border-radius:4px; padding:7px 16px; cursor:pointer;
+           transition:background .15s ease, border-color .15s ease; }
+    .btn:hover { border-color:var(--teal); background:var(--aqua); }
+    .btn:focus-visible { outline:2px solid var(--teal); outline-offset:2px; }
+    .btn-main { background:var(--teal); border-color:var(--teal); color:#fff; }
+    .btn-main:hover { background:var(--teal-d); color:#fff; }
+    .del { border:0; background:transparent; color:#a9c4cc; cursor:pointer; font-size:14px; padding:3px; line-height:1; }
+    .del:hover { color:var(--teal-d); }
+    .money { background:var(--aqua); border:1.5px solid var(--line); border-radius:6px; padding:12px 14px;
+             -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .print-only { display:none; }
+    .bar { width:210mm; max-width:100%; margin:0 auto 14px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+    @media (prefers-reduced-motion: reduce) { .bmb * { transition:none !important; } }
+    @media print {
+      .bmb { background:#fff; padding:0; }
+      .no-print { display:none !important; }
+      .print-only { display:inline; }
+      .paper { box-shadow:none; width:auto; padding:0; border:0; }
+      .f, .f:hover, .f:focus { background:transparent !important; border-bottom-color:transparent !important; }
+      .f::placeholder { color:transparent !important; }
+      .sel { border-color:transparent; }
+    }
+    @page { size:A4; margin:13mm; }
+  `;
+
+  /* 小さなラベル付き1行 */
+  const Line = ({ label, w = 52, children }) => (
+    <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+      <span className="lbl" style={{ width: w, flex: "none" }}>{label}</span>
+      <span style={{ flex: 1, minWidth: 0 }}>{children}</span>
+    </div>
+  );
+
+  return (
+    <div className="bmb">
+      <style>{css}</style>
+
+      <div className="bar no-print" style={{ marginBottom: 8 }}>
+        <button className="btn" onClick={newInvoice}>新規作成</button>
+        <button className="btn btn-main" onClick={() => saveInvoice(false)}>
+          {currentDoc ? "上書き保存" : "名前を付けて保存"}
+        </button>
+        {currentDoc && <button className="btn" onClick={() => saveInvoice(true)}>別名で保存</button>}
+        <select className="sel" style={{ width: 268, background: "#fff", borderColor: "var(--line)", padding: "6px 12px" }}
+                value={currentId || ""} onChange={(e) => openInvoice(e.target.value)}>
+          <option value="">保存した請求書を開く（{invoices.length}件）</option>
+          {invoices.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.name || d.meta.no || "無題"}　（{d.meta.issued}）
+            </option>
+          ))}
+        </select>
+        <select className="sel" style={{ width: 250, background: "#fff", borderColor: "var(--line)", padding: "6px 12px" }}
+                value="" onChange={(e) => copyInvoice(e.target.value)}>
+          <option value="">保存済みをコピーして新規作成</option>
+          {invoices.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.name || d.meta.no || "無題"}　（{d.meta.issued}）
+            </option>
+          ))}
+        </select>
+        {currentDoc && <button className="btn" onClick={renameInvoice}>名前を変更</button>}
+        {currentId && <button className="btn" onClick={deleteInvoice}>削除</button>}
+        <button className="btn" onClick={exportAll}>バックアップ書き出し</button>
+        <input ref={importRef} type="file" accept="application/json" style={{ display: "none" }} onChange={importAll} />
+        <button className="btn" onClick={() => importRef.current.click()}>読み込み</button>
+        <span style={{ fontSize: 11.5, color: "var(--teal-d)", letterSpacing: ".04em" }}>{status}</span>
+      </div>
+
+      <div className="bar no-print">
+        <button className="btn btn-main" onClick={() => window.print()}>印刷 / PDFで保存</button>
+
+        <select className="sel" style={{ width: 216, background: "#fff", borderColor: "var(--line)",
+                                         padding: "6px 12px" }}
+                value={profileKey} onChange={(e) => switchProfile(e.target.value)}>
+          {PROFILES.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}
+        </select>
+
+        <input ref={logoRef} type="file" accept="image/*" style={{ display: "none" }}
+               onChange={(e) => pickImage(e, setLogo)} />
+        <button className="btn" onClick={() => logoRef.current.click()}>{logo ? "ロゴを変更" : "ロゴを追加"}</button>
+        {logo && <button className="btn" onClick={() => setLogo(null)}>ロゴを削除</button>}
+
+        <input ref={stampRef} type="file" accept="image/*" style={{ display: "none" }}
+               onChange={(e) => pickImage(e, setStamp)} />
+        <button className="btn" onClick={() => stampRef.current.click()}>{stamp ? "社判を変更" : "社判を追加"}</button>
+        {stamp !== PROFILES.find((p) => p.key === profileKey).stamp && (
+          <button className="btn"
+                  onClick={() => setStamp(PROFILES.find((p) => p.key === profileKey).stamp)}>
+            既定の社判に戻す
+          </button>
+        )}
+      </div>
+
+      <div className="paper">
+        {/* 見出し + 日付・請求番号 */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20 }}>
+          <h1 style={{ margin: "2px 0 0", fontSize: 23, fontWeight: 600, letterSpacing: ".42em",
+                       color: "var(--teal)" }}>
+            請求書
+          </h1>
+
+          <div style={{ width: 246 }}>
+            <div style={{ textAlign: "right", fontSize: 11.5, fontWeight: 500 }}>
+              <input className="f no-print" type="date" value={meta.issued}
+                     style={{ width: "auto", display: "inline-block", textAlign: "right" }}
+                     onChange={(e) => setMeta({ ...meta, issued: e.target.value })} />
+              <span className="print-only">{jpDate(meta.issued)}</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 9 }}>
+              <span className="tag">請求番号</span>
+              <span className="box" style={{ flex: 1, minWidth: 0, fontSize: 12.5 }}>
+                <input className="f" value={meta.no}
+                       onChange={(e) => setMeta({ ...meta, no: e.target.value })} />
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* 請求先の呼び出し（印刷されません） */}
+        <div className="no-print" style={{ display: "flex", gap: 8, alignItems: "center", margin: "10px 0 0" }}>
+          <select className="sel" style={{ width: 246, flex: "none", background: "#fff", fontSize: 11 }}
+                  value="" onChange={(e) => pickCustomer(e.target.value)}>
+            <option value="">保存した請求先から選ぶ（{customers.length}件）</option>
+            {customers.map((c) => (
+              <option key={c.id} value={c.id}>{c.company}{c.person ? `　${c.person}` : ""}</option>
+            ))}
+          </select>
+          <button className="btn" style={{ fontSize: 11, padding: "5px 12px" }} onClick={saveCustomer}>
+            この請求先を保存
+          </button>
+          <button className="btn" style={{ fontSize: 11, padding: "5px 12px" }} onClick={deleteCustomer}>
+            保存先から削除
+          </button>
+        </div>
+
+        {/* 請求先 / 自社 */}
+        <div style={{ display: "flex", gap: 18, alignItems: "flex-start", margin: "8px 0 0" }}>
+          <div style={{ flex: "1 1 0", minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+              <input className="f" style={{ fontSize: 13.5, fontWeight: 500, letterSpacing: ".03em",
+                                            borderBottom: "1px solid var(--line)" }}
+                     value={to.company} placeholder="請求先名"
+                     onChange={(e) => setTo({ ...to, company: e.target.value })} />
+              <select className="sel no-print" style={{ width: 58, flex: "none", fontSize: 10.5 }}
+                      value={to.honorific} onChange={(e) => setTo({ ...to, honorific: e.target.value })}>
+                <option>御中</option><option>様</option>
+              </select>
+              <span className="print-only" style={{ fontSize: 12 }}>{to.honorific}</span>
+            </div>
+            <div className="meta" style={{ marginTop: 4 }}>
+              <Line label="ご担当者">
+                <input className="f" value={to.person} placeholder="担当者名"
+                       onChange={(e) => setTo({ ...to, person: e.target.value })} />
+              </Line>
+              <Line label="住所">
+                <span style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+                  <input className="f" style={{ width: 66, flex: "none" }} value={to.zip} placeholder="〒000-0000"
+                         onChange={(e) => setTo({ ...to, zip: e.target.value })} />
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <AutoText value={to.address} placeholder="住所" size={10.5}
+                              onChange={(e) => setTo({ ...to, address: e.target.value })} />
+                  </span>
+                </span>
+              </Line>
+              <Line label="電話番号">
+                <input className="f" value={to.tel} placeholder="00-0000-0000"
+                       onChange={(e) => setTo({ ...to, tel: e.target.value })} />
+              </Line>
+            </div>
+          </div>
+
+          {/* 自社（社名の右に朱印を重ねる） */}
+          <div style={{ width: 196, flex: "none" }}>
+            {logo && (
+              <img src={logo} alt="ロゴ"
+                   style={{ maxHeight: 30, maxWidth: 150, objectFit: "contain", marginBottom: 5, display: "block" }} />
+            )}
+
+            <div>
+              {/* 社名の行。社判は社名の右端（BMB の B あたり）に少し重ねる */}
+              <div style={{ position: "relative", height: 46, paddingRight: 4 }}>
+                <input className="f" style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: ".04em" }}
+                       value={me.name} onChange={(e) => setMe({ ...me, name: e.target.value })} />
+
+                {stamp ? (
+                  <img src={stamp} alt="社判"
+                       style={{ position: "absolute", left: 74, top: -7, width: 58, height: 58,
+                                objectFit: "contain", mixBlendMode: "multiply", opacity: .92,
+                                pointerEvents: "none" }} />
+                ) : (
+                  <div className="no-print"
+                       style={{ position: "absolute", left: 74, top: -7, width: 58, height: 58,
+                                border: "1px dashed var(--aqua2)", borderRadius: 4, display: "grid",
+                                placeItems: "center", fontSize: 8.5, color: "#a9c4cc", textAlign: "center",
+                                lineHeight: 1.5, pointerEvents: "none" }}>
+                    社判を<br />ここに
+                  </div>
+                )}
+              </div>
+
+              <div className="meta" style={{ color: "#41545a" }}>
+                <input className="f" value={me.zip} onChange={(e) => setMe({ ...me, zip: e.target.value })} />
+                <input className="f" value={me.address} onChange={(e) => setMe({ ...me, address: e.target.value })} />
+                <input className="f" value={me.tel} placeholder="TEL"
+                       onChange={(e) => setMe({ ...me, tel: e.target.value })} />
+                <input className="f" value={me.regNo} placeholder="登録番号"
+                       onChange={(e) => setMe({ ...me, regNo: e.target.value })} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ごあいさつ・件名 */}
+        <div style={{ color: "var(--teal-d)", fontSize: 12.5, margin: "16px 0 8px" }}>
+          下記のとおりご請求申し上げます。
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, fontSize: 11.5 }}>
+          <span className="tag">件名</span>
+          <input className="f" style={{ borderBottom: "1px solid var(--aqua2)" }} value={meta.subject}
+                 placeholder="案件名" onChange={(e) => setMeta({ ...meta, subject: e.target.value })} />
+        </div>
+
+        {/* ご請求金額・お支払日・お振込先 */}
+        <div className="money" style={{ margin: "0 0 14px" }}>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 20, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 12, flex: "1 1 0", minWidth: 0 }}>
+              <span className="tag" style={{ marginBottom: 7 }}>ご請求金額</span>
+              <span className="num" style={{ fontSize: 27, fontWeight: 700, lineHeight: 1.1,
+                                             borderBottom: "2px solid var(--teal)", padding: "0 12px 3px" }}>
+                {yen(totals.total)}<span style={{ fontSize: 17 }}>-</span>
+              </span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span className="tag">お支払日</span>
+              <span style={{ minWidth: 122, fontSize: 12.5, fontWeight: 600 }}>
+                <input className="f no-print" type="date" value={meta.due}
+                       onChange={(e) => setMeta({ ...meta, due: e.target.value })} />
+                <span className="print-only">{jpDate(meta.due)}</span>
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 11 }}>
+            <span className="tag">お振込先</span>
+            <span className="box" style={{ flex: 1, minWidth: 0, fontSize: 11.5, padding: "4px 10px" }}>
+              <input className="f" value={me.bank} onChange={(e) => setMe({ ...me, bank: e.target.value })} />
+            </span>
+          </div>
+        </div>
+
+        {/* 明細（主役） */}
+        <table className="tbl">
+          <colgroup>
+            <col style={{ width: "4%" }} />
+            <col style={{ width: "10%" }} />
+            <col />
+            <col style={{ width: "24%" }} />
+            <col style={{ width: "16%" }} />
+            <col className="no-print" style={{ width: "3%" }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>No.</th>
+              <th style={{ fontSize: 9.5, letterSpacing: ".04em", whiteSpace: "nowrap" }}>タグ番号</th>
+              <th>商品詳細</th>
+              <th>作業内容</th>
+              <th className="num">小計（税抜）</th>
+              <th className="no-print" />
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((it, i) => (
+              <tr key={it.id}>
+                <td className="num" style={{ color: "var(--soft)", fontSize: 11, textAlign: "center" }}>{i + 1}</td>
+                <td>
+                  <input className="f" style={{ fontSize: 9.5, whiteSpace: "nowrap", textOverflow: "ellipsis" }}
+                         value={it.tag} placeholder="タグ番号"
+                         onChange={(e) => setItem(it.id, "tag", e.target.value)} />
+                </td>
+                <td>
+                  <AutoText value={it.detail} placeholder="色・ブランド名・特徴"
+                            onChange={(e) => setItem(it.id, "detail", e.target.value)} />
+                </td>
+                <td>
+                  <AutoText value={it.work} placeholder="作業内容"
+                            onChange={(e) => setItem(it.id, "work", e.target.value)} />
+                </td>
+                <td className="num">
+                  <input className="f num" inputMode="numeric" value={fmtInput(it.amount)}
+                         onChange={(e) => setItem(it.id, "amount", e.target.value.replace(/[^\d-]/g, ""))} />
+                </td>
+                <td className="no-print" style={{ textAlign: "center" }}>
+                  <button className="del" title="この行を削除"
+                          onClick={() => setItems((r) => r.filter((x) => x.id !== it.id))}>×</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <button className="btn no-print" style={{ marginTop: 10 }}
+                onClick={() => setItems((r) => [...r, newRow()])}>
+          明細行を追加
+        </button>
+
+        {/* 備考欄・合計 */}
+        <div style={{ display: "flex", gap: 16, marginTop: 16, alignItems: "flex-start" }}>
+          <div style={{ flex: "1 1 0", minWidth: 0 }}>
+            <span className="tag">備考欄</span>
+            <div className="box" style={{ marginTop: 6, fontSize: 11.5 }}>
+              <textarea className="f" rows={3} value={me.note}
+                        onChange={(e) => setMe({ ...me, note: e.target.value })} />
+            </div>
+          </div>
+
+          <table style={{ width: 276, flex: "none", borderCollapse: "collapse", fontSize: 12.5 }}>
+            <tbody>
+              <tr>
+                <td className="sum-l" style={{ width: "50%" }}>小　計</td>
+                <td className="sum-v num">{num(totals.sub)}</td>
+              </tr>
+              <tr>
+                <td className="sum-l" style={{ letterSpacing: ".06em" }}>消費税（10%）</td>
+                <td className="sum-v num">{num(totals.tax)}</td>
+              </tr>
+              <tr>
+                <td className="sum-l">合計金額</td>
+                <td className="sum-v num" style={{ fontSize: 15, fontWeight: 700 }}>{num(totals.total)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+
+ReactDOM.createRoot(document.getElementById("root")).render(<InvoiceMaker />);
+</script>
+</body>
+</html>
