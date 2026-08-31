@@ -902,8 +902,10 @@ function InvoiceMaker() {
       .paper > *:last-child { margin-bottom:0 !important; }
       .pfoot { display:block; position:fixed; left:0; right:0; bottom:0; text-align:center;
                font-size:9px; color:var(--soft); letter-spacing:.1em; }
-      /* 1枚に収まるときは印刷対象の高さを1ページ分で打ち切り、空白ページを防ぐ */
-      .onepage { height:262mm; overflow:hidden; }
+      /* 1枚に収まるときは用紙を固定配置にする。文書の流れの高さが 0 になるため、
+         ブラウザ側の計算に関係なく1ページで確実に終わる */
+      .onepage { height:0; overflow:visible; }
+      .onepage .paper { position:fixed; top:0; left:0; right:0; }
       .paper, .bmb, #root, body { break-after:avoid; page-break-after:avoid; }
       .f, .f:hover, .f:focus { background:transparent !important; border-bottom-color:transparent !important; }
       .f::placeholder { color:transparent !important; }
