@@ -491,6 +491,7 @@ function InvoiceMaker() {
   const [status, setStatus] = useState("");
   const logoRef = useRef(null);
   const stampRef = useRef(null);
+  const importRef = useRef(null);
   const timer = useRef(null);
   const flash = msg => {
     setStatus(msg);
@@ -626,6 +627,86 @@ function InvoiceMaker() {
     setItems([newRow(), newRow(), newRow()]);
     setCurrentId(null);
     flash("新しい請求書を作成しました");
+  };
+
+  /* --- 当社名の切り替え --- */
+  const switchProfile = async key => {
+    const p = PROFILES.find(x => x.key === key);
+    if (!p) return;
+    const nextMe = {
+      ...me,
+      name: p.name
+    };
+    setProfileKey(key);
+    setStamp(p.stamp);
+    setMe(nextMe);
+    await store.set(K.brand, {
+      logo,
+      stamp: p.stamp,
+      me: nextMe,
+      profileKey: key
+    });
+    flash(p.name + " に切り替えました");
+  };
+
+  /* --- バックアップ --- */
+  const exportAll = async () => {
+    const data = {
+      app: "bmb-invoice",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      invoices,
+      customers,
+      brand: {
+        logo,
+        stamp,
+        me,
+        profileKey
+      }
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json"
+    }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `請求書バックアップ_${today()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    flash("バックアップを書き出しました");
+  };
+  const importAll = e => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = async () => {
+      try {
+        const d = JSON.parse(r.result);
+        if (d.app !== "bmb-invoice") throw new Error("形式が違います");
+        if (!window.confirm("現在の保存内容をこのバックアップで置き換えます。よろしいですか？")) return;
+        const inv = Array.isArray(d.invoices) ? d.invoices : [];
+        const cus = Array.isArray(d.customers) ? d.customers : [];
+        setInvoices(inv);
+        setCustomers(cus);
+        setCurrentId(null);
+        await store.set(K.inv, inv);
+        await store.set(K.cus, cus);
+        if (d.brand) {
+          if (d.brand.profileKey) setProfileKey(d.brand.profileKey);
+          if (d.brand.logo) setLogo(d.brand.logo);
+          if (d.brand.stamp) setStamp(d.brand.stamp);
+          if (d.brand.me) setMe(m => ({
+            ...m,
+            ...d.brand.me
+          }));
+          await store.set(K.brand, d.brand);
+        }
+        flash("バックアップを読み込みました");
+      } catch (err) {
+        flash("読み込めませんでした：" + err.message);
+      }
+    };
+    r.readAsText(f);
   };
 
   /* --- 請求先 --- */
@@ -764,10 +845,11 @@ function InvoiceMaker() {
     .bar { width:210mm; margin:0 auto 14px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
     @media (prefers-reduced-motion: reduce) { .bmb * { transition:none !important; } }
     @media print {
-      .bmb { background:#fff; padding:0; }
+      html, body { width:auto; margin:0; }
+      .bmb { background:#fff; padding:0; min-width:0; }
       .no-print { display:none !important; }
       .print-only { display:inline; }
-      .paper { box-shadow:none; width:auto; padding:0; border:0; }
+      .paper { box-shadow:none; width:auto; max-width:none; padding:0; border:0; }
       .f, .f:hover, .f:focus { background:transparent !important; border-bottom-color:transparent !important; }
       .f::placeholder { color:transparent !important; }
       .sel { border-color:transparent; }
@@ -850,7 +932,21 @@ function InvoiceMaker() {
   }, "名前を変更"), currentId && /*#__PURE__*/React.createElement("button", {
     className: "btn",
     onClick: deleteInvoice
-  }, "削除"), /*#__PURE__*/React.createElement("span", {
+  }, "削除"), /*#__PURE__*/React.createElement("button", {
+    className: "btn",
+    onClick: exportAll
+  }, "バックアップ書き出し"), /*#__PURE__*/React.createElement("input", {
+    ref: importRef,
+    type: "file",
+    accept: "application/json",
+    style: {
+      display: "none"
+    },
+    onChange: importAll
+  }), /*#__PURE__*/React.createElement("button", {
+    className: "btn",
+    onClick: () => importRef.current.click()
+  }, "読み込み"), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 11.5,
       color: "var(--teal-d)",
