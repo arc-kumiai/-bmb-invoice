@@ -676,6 +676,22 @@ function InvoiceMaker() {
     };
   }, [items, to, me, meta]);
 
+  /* --- 印刷 --- */
+  const isIOS = typeof navigator !== "undefined" && (/iPad|iPhone|iPod/.test(navigator.userAgent) || navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  /* iOS版のChrome / Firefox / Edge は window.print() が使えない */
+  const noPrintApi = typeof navigator !== "undefined" && /CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
+  const doPrint = () => {
+    if (noPrintApi) {
+      flash("画面下（または右上）の共有ボタン →「プリント」から印刷・PDF保存できます");
+      return;
+    }
+    try {
+      window.print();
+    } catch (e) {
+      flash("共有ボタン →「プリント」から印刷・PDF保存してください");
+    }
+  };
+
   /* --- 当社名の切り替え --- */
   const switchProfile = async key => {
     const p = PROFILES.find(x => x.key === key);
@@ -897,15 +913,14 @@ function InvoiceMaker() {
       .bmb { background:#fff; padding:0; min-width:0; min-height:0; }
       .no-print { display:none !important; }
       .print-only { display:inline; }
-      .paper { box-shadow:none; width:auto; max-width:none; padding:0; border:0; }
+      .paper { box-shadow:none; width:184mm; max-width:184mm; margin:0 auto; padding:0; border:0; }
       .parties { margin-top:26px !important; }
       .paper > *:last-child { margin-bottom:0 !important; }
       .pfoot { display:block; position:fixed; left:0; right:0; bottom:0; text-align:center;
                font-size:9px; color:var(--soft); letter-spacing:.1em; }
-      /* 1枚に収まるときは用紙を固定配置にする。文書の流れの高さが 0 になるため、
-         ブラウザ側の計算に関係なく1ページで確実に終わる */
-      .onepage { height:0; overflow:visible; }
-      .onepage .paper { position:fixed; top:0; left:0; right:0; }
+      /* 1枚に収まるときは印刷対象の高さを1ページ分で打ち切る */
+      .onepage { height:262mm; overflow:hidden; }
+      .onepage .paper { max-height:262mm; overflow:hidden; }
       .paper, .bmb, #root, body { break-after:avoid; page-break-after:avoid; }
       .f, .f:hover, .f:focus { background:transparent !important; border-bottom-color:transparent !important; }
       .f::placeholder { color:transparent !important; }
@@ -1018,7 +1033,7 @@ function InvoiceMaker() {
     className: "bar no-print"
   }, /*#__PURE__*/React.createElement("button", {
     className: "btn btn-main",
-    onClick: () => window.print()
+    onClick: doPrint
   }, "印刷 / PDFで保存"), /*#__PURE__*/React.createElement("select", {
     className: "sel",
     style: {
@@ -1060,7 +1075,16 @@ function InvoiceMaker() {
   }, stamp ? "社判を変更" : "社判を追加"), stamp !== activeProfile.stamp && /*#__PURE__*/React.createElement("button", {
     className: "btn",
     onClick: () => setStamp(activeProfile.stamp)
-  }, "既定の社判に戻す")), /*#__PURE__*/React.createElement("div", {
+  }, "既定の社判に戻す")), (isIOS || noPrintApi) && /*#__PURE__*/React.createElement("div", {
+    className: "bar no-print",
+    style: {
+      marginTop: -6,
+      marginBottom: 12,
+      fontSize: 11.5,
+      color: "#5d7078",
+      lineHeight: 1.6
+    }
+  }, noPrintApi ? "このブラウザは印刷ボタンに対応していません。共有ボタン →「プリント」を選ぶと、印刷とPDF保存ができます。" : "印刷画面が開いたら、指を広げて拡大するとPDFとして保存できます（プレビューを長押し → 共有 → ファイルに保存）。"), /*#__PURE__*/React.createElement("div", {
     className: "paper",
     ref: paperRef
   }, /*#__PURE__*/React.createElement("div", {
