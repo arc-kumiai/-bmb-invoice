@@ -492,6 +492,8 @@ function InvoiceMaker() {
   const logoRef = useRef(null);
   const stampRef = useRef(null);
   const importRef = useRef(null);
+  const paperRef = useRef(null);
+  const [pageMarks, setPageMarks] = useState([]);
   const timer = useRef(null);
   const flash = msg => {
     setStatus(msg);
@@ -628,6 +630,31 @@ function InvoiceMaker() {
     setCurrentId(null);
     flash("新しい請求書を作成しました");
   };
+
+  /* 印刷時のページ番号。用紙の高さから枚数を割り出して各ページの下端に置く */
+  useEffect(() => {
+    const build = () => {
+      const paper = paperRef.current;
+      if (!paper) return;
+      const probe = document.createElement("div");
+      probe.style.cssText = "position:absolute;visibility:hidden;height:100mm;";
+      document.body.appendChild(probe);
+      const mm = probe.getBoundingClientRect().height / 100 || 96 / 25.4; // 測れない場合の既定値
+      probe.remove();
+      const pageH = (297 - 13 - 16) * mm; // A4 から上下の余白を引いた印字領域
+      const total = Math.max(1, Math.ceil(((paper.scrollHeight || 0) - 4) / pageH));
+      setPageMarks(Array.from({
+        length: total
+      }, (_, i) => ({
+        n: i + 1,
+        total,
+        top: (i + 1) * pageH - 7 * mm
+      })));
+    };
+    build();
+    window.addEventListener("beforeprint", build);
+    return () => window.removeEventListener("beforeprint", build);
+  }, [items, to, me, meta]);
 
   /* --- 当社名の切り替え --- */
   const switchProfile = async key => {
@@ -790,7 +817,7 @@ function InvoiceMaker() {
     .bmb { background:#eef2f4; min-height:100vh; min-width:max-content; padding:28px 16px 64px; color:var(--ink);
            font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","YuGothic","Noto Sans JP","Meiryo",sans-serif;
            font-feature-settings:"palt" 1; -webkit-font-smoothing:antialiased; }
-    .paper { width:210mm; margin:0 auto; background:#fff; padding:13mm 14mm 12mm;
+    .paper { position:relative; width:210mm; margin:0 auto; background:#fff; padding:13mm 14mm 12mm;
              border:1px solid var(--line); border-radius:8px;
              box-shadow:0 1px 3px rgba(20,60,70,.08), 0 16px 40px rgba(20,60,70,.12); }
     .f { font:inherit; color:inherit; background:transparent; border:0; border-bottom:1px solid transparent;
@@ -842,19 +869,23 @@ function InvoiceMaker() {
     .money { background:var(--aqua); border:1.5px solid var(--line); border-radius:6px; padding:12px 14px;
              -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     .print-only { display:none; }
+    .pfoot { display:none; }
     .bar { width:210mm; margin:0 auto 14px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
     @media (prefers-reduced-motion: reduce) { .bmb * { transition:none !important; } }
     @media print {
       html, body { width:auto; margin:0; }
-      .bmb { background:#fff; padding:0; min-width:0; }
+      .bmb { background:#fff; padding:0; min-width:0; min-height:0; }
       .no-print { display:none !important; }
       .print-only { display:inline; }
       .paper { box-shadow:none; width:auto; max-width:none; padding:0; border:0; }
+      .parties { margin-top:26px !important; }
+      .pfoot { display:block; position:absolute; left:0; right:0; text-align:center;
+               font-size:9px; color:var(--soft); letter-spacing:.1em; }
       .f, .f:hover, .f:focus { background:transparent !important; border-bottom-color:transparent !important; }
       .f::placeholder { color:transparent !important; }
       .sel { border-color:transparent; }
     }
-    @page { size:A4; margin:13mm; }
+    @page { size:A4; margin:13mm 13mm 16mm; }
   `;
 
   /* 小さなラベル付き1行 */
@@ -999,7 +1030,8 @@ function InvoiceMaker() {
     className: "btn",
     onClick: () => setStamp(PROFILES.find(p => p.key === profileKey).stamp)
   }, "既定の社判に戻す")), /*#__PURE__*/React.createElement("div", {
-    className: "paper"
+    className: "paper",
+    ref: paperRef
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -1101,7 +1133,7 @@ function InvoiceMaker() {
     },
     onClick: deleteCustomer
   }, "保存先から削除")), /*#__PURE__*/React.createElement("div", {
-    className: "cols",
+    className: "cols parties",
     style: {
       display: "flex",
       gap: 18,
@@ -1120,7 +1152,7 @@ function InvoiceMaker() {
       gap: 6
     }
   }, /*#__PURE__*/React.createElement("input", {
-    className: "f",
+    className: "f no-print",
     style: {
       fontSize: 13.5,
       fontWeight: 500,
@@ -1133,7 +1165,17 @@ function InvoiceMaker() {
       ...to,
       company: e.target.value
     })
-  }), /*#__PURE__*/React.createElement("select", {
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "print-only",
+    style: {
+      fontSize: 13.5,
+      fontWeight: 500,
+      letterSpacing: ".03em",
+      borderBottom: "1px solid var(--line)",
+      paddingRight: 10,
+      whiteSpace: "nowrap"
+    }
+  }, to.company), /*#__PURE__*/React.createElement("select", {
     className: "sel no-print",
     style: {
       width: 58,
@@ -1148,7 +1190,9 @@ function InvoiceMaker() {
   }, /*#__PURE__*/React.createElement("option", null, "御中"), /*#__PURE__*/React.createElement("option", null, "様")), /*#__PURE__*/React.createElement("span", {
     className: "print-only",
     style: {
-      fontSize: 12
+      fontSize: 12,
+      whiteSpace: "nowrap",
+      flex: "none"
     }
   }, to.honorific)), /*#__PURE__*/React.createElement("div", {
     className: "meta",
@@ -1570,7 +1614,13 @@ function InvoiceMaker() {
       fontSize: 15,
       fontWeight: 700
     }
-  }, num(totals.total))))))));
+  }, num(totals.total)))))), pageMarks.map(p => /*#__PURE__*/React.createElement("div", {
+    key: p.n,
+    className: "pfoot",
+    style: {
+      top: p.top
+    }
+  }, p.n, " / ", p.total))));
 }
   ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(InvoiceMaker));
 } catch (err) {
