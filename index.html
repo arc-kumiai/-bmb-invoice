@@ -2,8 +2,9 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=0.4, minimum-scale=0.25, maximum-scale=5, user-scalable=yes" />
 <meta name="robots" content="noindex, nofollow" />
+<meta name="theme-color" content="#12a0b8" />
 <title>請求書作成｜合同会社BMB</title>
 <style>html,body{margin:0;padding:0;}</style>
 </head>
@@ -329,7 +330,7 @@ const {
  *  金額はすべて税抜きで入力し、末尾で消費税10%を加算します
  * ------------------------------------------------------------------ */
 
-/* 保存領域。この端末のブラウザ（localStorage）に保存します */
+/* 保存領域。window.storage が使えない環境ではセッション内メモリに退避する */
 const K = {
   inv: "bmb:invoices",
   cus: "bmb:customers",
@@ -490,7 +491,6 @@ function InvoiceMaker() {
   const [status, setStatus] = useState("");
   const logoRef = useRef(null);
   const stampRef = useRef(null);
-  const importRef = useRef(null);
   const timer = useRef(null);
   const flash = msg => {
     setStatus(msg);
@@ -628,84 +628,6 @@ function InvoiceMaker() {
     flash("新しい請求書を作成しました");
   };
 
-  /* --- 当社名の切り替え --- */
-  const switchProfile = async key => {
-    const p = PROFILES.find(x => x.key === key);
-    if (!p) return;
-    const nextMe = {
-      ...me,
-      name: p.name
-    };
-    setProfileKey(key);
-    setStamp(p.stamp);
-    setMe(nextMe);
-    await store.set(K.brand, {
-      logo,
-      stamp: p.stamp,
-      me: nextMe,
-      profileKey: key
-    });
-    flash(p.name + " に切り替えました");
-  };
-
-  /* --- バックアップ --- */
-  const exportAll = async () => {
-    const data = {
-      app: "bmb-invoice",
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      invoices,
-      customers,
-      brand: {
-        logo,
-        stamp,
-        me
-      }
-    };
-    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {
-      type: "application/json"
-    }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `請求書バックアップ_${today()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    flash("バックアップを書き出しました");
-  };
-  const importAll = e => {
-    const f = e.target.files && e.target.files[0];
-    e.target.value = "";
-    if (!f) return;
-    const r = new FileReader();
-    r.onload = async () => {
-      try {
-        const d = JSON.parse(r.result);
-        if (d.app !== "bmb-invoice") throw new Error("形式が違います");
-        if (!window.confirm("現在の保存内容をこのバックアップで置き換えます。よろしいですか？")) return;
-        const inv = Array.isArray(d.invoices) ? d.invoices : [];
-        const cus = Array.isArray(d.customers) ? d.customers : [];
-        setInvoices(inv);
-        setCustomers(cus);
-        setCurrentId(null);
-        await store.set(K.inv, inv);
-        await store.set(K.cus, cus);
-        if (d.brand) {
-          if (d.brand.logo) setLogo(d.brand.logo);
-          if (d.brand.stamp) setStamp(d.brand.stamp);
-          if (d.brand.me) setMe(m => ({
-            ...m,
-            ...d.brand.me
-          }));
-          await store.set(K.brand, d.brand);
-        }
-        flash("バックアップを読み込みました");
-      } catch (err) {
-        flash("読み込めませんでした：" + err.message);
-      }
-    };
-    r.readAsText(f);
-  };
-
   /* --- 請求先 --- */
   const saveCustomer = async () => {
     if (!to.company.trim()) {
@@ -784,10 +706,10 @@ function InvoiceMaker() {
     .bmb { --ink:#2c3b41; --soft:#6e8a92; --teal:#12a0b8; --teal-d:#0b7f95;
            --aqua:#e9f5f8; --aqua2:#cfe8ef; --line:#8fcedd; }
     .bmb *, .bmb *::before, .bmb *::after { box-sizing:border-box; }
-    .bmb { background:#eef2f4; min-height:100vh; padding:28px 16px 64px; color:var(--ink);
+    .bmb { background:#eef2f4; min-height:100vh; min-width:max-content; padding:28px 16px 64px; color:var(--ink);
            font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","YuGothic","Noto Sans JP","Meiryo",sans-serif;
            font-feature-settings:"palt" 1; -webkit-font-smoothing:antialiased; }
-    .paper { width:210mm; max-width:100%; margin:0 auto; background:#fff; padding:13mm 14mm 12mm;
+    .paper { width:210mm; margin:0 auto; background:#fff; padding:13mm 14mm 12mm;
              border:1px solid var(--line); border-radius:8px;
              box-shadow:0 1px 3px rgba(20,60,70,.08), 0 16px 40px rgba(20,60,70,.12); }
     .f { font:inherit; color:inherit; background:transparent; border:0; border-bottom:1px solid transparent;
@@ -839,7 +761,7 @@ function InvoiceMaker() {
     .money { background:var(--aqua); border:1.5px solid var(--line); border-radius:6px; padding:12px 14px;
              -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     .print-only { display:none; }
-    .bar { width:210mm; max-width:100%; margin:0 auto 14px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+    .bar { width:210mm; margin:0 auto 14px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
     @media (prefers-reduced-motion: reduce) { .bmb * { transition:none !important; } }
     @media print {
       .bmb { background:#fff; padding:0; }
@@ -928,21 +850,7 @@ function InvoiceMaker() {
   }, "名前を変更"), currentId && /*#__PURE__*/React.createElement("button", {
     className: "btn",
     onClick: deleteInvoice
-  }, "削除"), /*#__PURE__*/React.createElement("button", {
-    className: "btn",
-    onClick: exportAll
-  }, "バックアップ書き出し"), /*#__PURE__*/React.createElement("input", {
-    ref: importRef,
-    type: "file",
-    accept: "application/json",
-    style: {
-      display: "none"
-    },
-    onChange: importAll
-  }), /*#__PURE__*/React.createElement("button", {
-    className: "btn",
-    onClick: () => importRef.current.click()
-  }, "読み込み"), /*#__PURE__*/React.createElement("span", {
+  }, "削除"), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 11.5,
       color: "var(--teal-d)",
@@ -1097,6 +1005,7 @@ function InvoiceMaker() {
     },
     onClick: deleteCustomer
   }, "保存先から削除")), /*#__PURE__*/React.createElement("div", {
+    className: "cols",
     style: {
       display: "flex",
       gap: 18,
@@ -1204,6 +1113,7 @@ function InvoiceMaker() {
       tel: e.target.value
     })
   })))), /*#__PURE__*/React.createElement("div", {
+    className: "self",
     style: {
       width: 196,
       flex: "none"
@@ -1452,13 +1362,15 @@ function InvoiceMaker() {
   }))), /*#__PURE__*/React.createElement("tbody", null, items.map((it, i) => /*#__PURE__*/React.createElement("tr", {
     key: it.id
   }, /*#__PURE__*/React.createElement("td", {
-    className: "num",
+    className: "num rowno",
     style: {
       color: "var(--soft)",
       fontSize: 11,
       textAlign: "center"
     }
-  }, i + 1), /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement("input", {
+  }, i + 1), /*#__PURE__*/React.createElement("td", {
+    "data-label": "タグ番号"
+  }, /*#__PURE__*/React.createElement("input", {
     className: "f",
     style: {
       fontSize: 9.5,
@@ -1468,16 +1380,21 @@ function InvoiceMaker() {
     value: it.tag,
     placeholder: "タグ番号",
     onChange: e => setItem(it.id, "tag", e.target.value)
-  })), /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement(AutoText, {
+  })), /*#__PURE__*/React.createElement("td", {
+    "data-label": "商品詳細"
+  }, /*#__PURE__*/React.createElement(AutoText, {
     value: it.detail,
     placeholder: "色・ブランド名・特徴",
     onChange: e => setItem(it.id, "detail", e.target.value)
-  })), /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement(AutoText, {
+  })), /*#__PURE__*/React.createElement("td", {
+    "data-label": "作業内容"
+  }, /*#__PURE__*/React.createElement(AutoText, {
     value: it.work,
     placeholder: "作業内容",
     onChange: e => setItem(it.id, "work", e.target.value)
   })), /*#__PURE__*/React.createElement("td", {
-    className: "num"
+    className: "num",
+    "data-label": "小計（税抜）"
   }, /*#__PURE__*/React.createElement("input", {
     className: "f num",
     inputMode: "numeric",
@@ -1499,6 +1416,7 @@ function InvoiceMaker() {
     },
     onClick: () => setItems(r => [...r, newRow()])
   }, "明細行を追加"), /*#__PURE__*/React.createElement("div", {
+    className: "cols",
     style: {
       display: "flex",
       gap: 16,
@@ -1527,6 +1445,7 @@ function InvoiceMaker() {
       note: e.target.value
     })
   }))), /*#__PURE__*/React.createElement("table", {
+    className: "totals",
     style: {
       width: 276,
       flex: "none",
@@ -1557,7 +1476,6 @@ function InvoiceMaker() {
     }
   }, num(totals.total))))))));
 }
-ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(InvoiceMaker, null));
   ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(InvoiceMaker));
 } catch (err) {
   document.getElementById("root").textContent = "起動に失敗しました：" + err.message;
