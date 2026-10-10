@@ -410,9 +410,11 @@ const jpDate = iso => {
 function Line({
   label,
   w = 52,
+  cls = "",
   children
 }) {
   return /*#__PURE__*/React.createElement("div", {
+    className: cls,
     style: {
       display: "flex",
       gap: 8,
@@ -531,6 +533,8 @@ function InvoiceMaker() {
   const [logo, setLogo] = useState(null);
   const [stamp, setStamp] = useState(STAMP_BMB);
   const [profileKey, setProfileKey] = useState("bmb");
+  const [density, setDensity] = useState(2); // 1 標準 / 2 やや詰める / 3 詰める
+
   const [meta, setMeta] = useState({
     no: "BMB-2026-0093",
     issued: today(),
@@ -628,6 +632,7 @@ function InvoiceMaker() {
       if (Array.isArray(bnk)) setBanks(bnk);
       if (brand) {
         if (brand.profileKey) setProfileKey(brand.profileKey);
+        if (brand.density) setDensity(brand.density);
         if (brand.logo) setLogo(brand.logo);
         if (brand.stamp) setStamp(brand.stamp);
         if (brand.me) setMe(m => ({
@@ -640,6 +645,8 @@ function InvoiceMaker() {
   }, []);
 
   /* --- 請求書 --- */
+  const dsize = density === 3 ? 10 : density === 2 ? 10.5 : 11; // 商品詳細・作業内容の文字サイズ
+
   const activeProfile = PROFILES.find(p => p.key === profileKey) || PROFILES[0];
   const currentDoc = invoices.find(x => x.id === currentId) || null;
   const defaultName = () => [meta.no, to.company, meta.subject].filter(Boolean).join("　") || "無題の請求書";
@@ -669,7 +676,8 @@ function InvoiceMaker() {
       logo,
       stamp,
       me,
-      profileKey
+      profileKey,
+      density
     });
     flash(ok ? `「${name}」を保存しました` : "この画面を閉じるまでの一時保存になります");
   };
@@ -764,19 +772,36 @@ function InvoiceMaker() {
         el.setAttribute("autocorrect", "off");
         el.setAttribute("spellcheck", "false");
       });
-      const cs = window.getComputedStyle(paper);
-      const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
-      // 画面にしか出ない要素（余白込み）の高さを差し引く
-      const hidden = [...paper.querySelectorAll(".phide")].reduce((h, el) => {
-        const m = window.getComputedStyle(el);
-        return h + el.getBoundingClientRect().height + parseFloat(m.marginTop) + parseFloat(m.marginBottom);
-      }, 0);
-      const pageH = (297 - 13 - 16) * mm; // A4 の印字領域
-      const contentH = paper.getBoundingClientRect().height - pad - hidden;
+
+      // 印刷と同じ体裁（画面専用の要素を隠し、内側の余白を外し、幅を印字領域に合わせる）で測る。
+      // 描画の途中で元に戻すので画面には出ない
+      paper.classList.add("measuring");
+      const pageH = (297 - 13 - 16) * mm; // A4 の印字領域の高さ
+      const box = paper.getBoundingClientRect();
+      const contentH = box.height;
+
+      // 明細の行は途中で切れないので、実際のページ送りを行単位で再現する
+      const blocks = [...paper.querySelectorAll(".tbl tbody tr")].map(tr => {
+        const r = tr.getBoundingClientRect();
+        return {
+          top: r.top - box.top,
+          bottom: r.bottom - box.top
+        };
+      });
+      let pageStart = 0;
+      let pages = 1;
+      blocks.forEach(b => {
+        if (b.bottom - pageStart > pageH) {
+          pages += 1;
+          pageStart = b.top;
+        }
+      });
+      if (contentH - pageStart > pageH) pages += 1;
+      paper.classList.remove("measuring");
       setPrintInfo({
         mm: Math.round(contentH / mm),
-        pages: Math.max(1, Math.ceil((contentH - 4) / pageH)),
-        one: contentH <= pageH - 5 * mm
+        pages: Math.max(1, pages),
+        one: pages === 1 && contentH <= pageH - 4 * mm
       });
     };
     build();
@@ -788,7 +813,7 @@ function InvoiceMaker() {
       window.removeEventListener("beforeprint", build);
       window.removeEventListener("resize", build);
     };
-  }, [items, to, me, meta]);
+  }, [items, to, me, meta, density]);
 
   /* --- お振込先マスター --- */
   const saveBank = async () => {
@@ -860,7 +885,8 @@ function InvoiceMaker() {
       logo,
       stamp: p.stamp,
       me: nextMe,
-      profileKey: key
+      profileKey: key,
+      density
     });
     flash(p.name + " に切り替えました");
   };
@@ -878,7 +904,8 @@ function InvoiceMaker() {
         logo,
         stamp,
         me,
-        profileKey
+        profileKey,
+        density
       }
     };
     const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {
@@ -913,6 +940,7 @@ function InvoiceMaker() {
         await store.set(K.bank, bnk);
         if (d.brand) {
           if (d.brand.profileKey) setProfileKey(d.brand.profileKey);
+          if (d.brand.density) setDensity(d.brand.density);
           if (d.brand.logo) setLogo(d.brand.logo);
           if (d.brand.stamp) setStamp(d.brand.stamp);
           if (d.brand.me) setMe(m => ({
@@ -983,7 +1011,8 @@ function InvoiceMaker() {
           stamp: r.result
         }),
         me,
-        profileKey
+        profileKey,
+        density
       }));
     };
     r.readAsDataURL(f);
@@ -1076,10 +1105,25 @@ function InvoiceMaker() {
     .btn-main:hover { background:var(--teal-d); color:#fff; }
     .del { border:0; background:transparent; color:#a9c4cc; cursor:pointer; font-size:14px; padding:3px; line-height:1; }
     .del:hover { color:var(--teal-d); }
-    .money { background:var(--aqua); border:1.5px solid var(--line); border-radius:6px; padding:12px 14px;
+    .money { background:var(--aqua); border:1.5px solid var(--line); border-radius:6px; padding:9px 13px;
              -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     .print-only { display:none; }
     .pfoot { display:none; }
+    /* 行の詰め具合 */
+    .paper.d1 .tbl { font-size:12px; }
+    .paper.d1 .tbl td { padding:6px; }
+    .paper.d2 .tbl { font-size:11px; }
+    .paper.d2 .tbl td { padding:3px 5px; }
+    .paper.d2 .tbl thead th { padding:4px 5px; }
+    .paper.d2 .sum-l, .paper.d2 .sum-v { padding:5px 9px; }
+    .paper.d3 .tbl { font-size:10.5px; }
+    .paper.d3 .tbl td { padding:1.5px 4px; }
+    .paper.d3 .tbl thead th { padding:3px 4px; }
+    .paper.d3 .sum-l, .paper.d3 .sum-v { padding:4px 8px; }
+
+    /* ページ数を測るときだけ、印刷と同じ体裁に一時的に切り替える */
+    .paper.measuring { width:184mm; padding:0; }
+    .paper.measuring .no-print { display:none !important; }
     .bar { width:210mm; margin:0 auto 14px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
     @media (prefers-reduced-motion: reduce) { .bmb * { transition:none !important; } }
     @media print {
@@ -1088,7 +1132,7 @@ function InvoiceMaker() {
       .no-print { display:none !important; }
       .print-only { display:inline; }
       .paper { box-shadow:none; width:184mm; max-width:184mm; margin:0 auto; padding:0; border:0; }
-      .parties { margin-top:26px !important; }
+      .parties { margin-top:18px !important; }
       .paper > *:last-child { margin-bottom:0 !important; }
       .pfoot { display:block; position:fixed; left:0; right:0; bottom:0; text-align:center;
                font-size:9px; color:var(--soft); letter-spacing:.1em; }
@@ -1197,7 +1241,23 @@ function InvoiceMaker() {
   }, PROFILES.map(p => /*#__PURE__*/React.createElement("option", {
     key: p.key,
     value: p.key
-  }, p.name))), /*#__PURE__*/React.createElement("input", {
+  }, p.name))), /*#__PURE__*/React.createElement("select", {
+    className: "sel",
+    style: {
+      width: 150,
+      background: "#fff",
+      borderColor: "var(--line)",
+      padding: "6px 12px"
+    },
+    value: density,
+    onChange: e => setDensity(Number(e.target.value))
+  }, /*#__PURE__*/React.createElement("option", {
+    value: 1
+  }, "行の高さ：標準"), /*#__PURE__*/React.createElement("option", {
+    value: 2
+  }, "行の高さ：やや詰める"), /*#__PURE__*/React.createElement("option", {
+    value: 3
+  }, "行の高さ：詰める")), /*#__PURE__*/React.createElement("input", {
     ref: logoRef,
     type: "file",
     accept: "image/*",
@@ -1235,7 +1295,7 @@ function InvoiceMaker() {
       lineHeight: 1.6
     }
   }, noPrintApi ? "このブラウザは印刷ボタンに対応していません。共有ボタン →「プリント」を選ぶと、印刷とPDF保存ができます。" : "印刷画面が開いたら、指を広げて拡大するとPDFとして保存できます（プレビューを長押し → 共有 → ファイルに保存）。"), /*#__PURE__*/React.createElement("div", {
-    className: "paper",
+    className: `paper d${density}`,
     ref: paperRef
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1405,7 +1465,8 @@ function InvoiceMaker() {
       marginTop: 4
     }
   }, /*#__PURE__*/React.createElement(Line, {
-    label: "ご担当者"
+    label: "ご担当者",
+    cls: to.person ? "" : "no-print"
   }, /*#__PURE__*/React.createElement("input", {
     className: "f",
     value: to.person,
@@ -1415,7 +1476,8 @@ function InvoiceMaker() {
       person: e.target.value
     })
   })), /*#__PURE__*/React.createElement(Line, {
-    label: "住所"
+    label: "住所",
+    cls: to.zip || to.address ? "" : "no-print"
   }, /*#__PURE__*/React.createElement("span", {
     style: {
       display: "flex",
@@ -1448,7 +1510,8 @@ function InvoiceMaker() {
       address: e.target.value
     })
   })))), /*#__PURE__*/React.createElement(Line, {
-    label: "電話番号"
+    label: "電話番号",
+    cls: to.tel ? "" : "no-print"
   }, /*#__PURE__*/React.createElement("input", {
     className: "f",
     value: to.tel,
@@ -1529,21 +1592,23 @@ function InvoiceMaker() {
       color: "#41545a"
     }
   }, /*#__PURE__*/React.createElement("input", {
-    className: "f",
+    className: me.zip ? "f" : "f no-print",
     value: me.zip,
+    placeholder: "〒000-0000",
     onChange: e => setMe({
       ...me,
       zip: e.target.value
     })
   }), /*#__PURE__*/React.createElement("input", {
-    className: "f",
+    className: me.address ? "f" : "f no-print",
     value: me.address,
+    placeholder: "住所",
     onChange: e => setMe({
       ...me,
       address: e.target.value
     })
   }), /*#__PURE__*/React.createElement("input", {
-    className: "f",
+    className: me.tel ? "f" : "f no-print",
     value: me.tel,
     placeholder: "TEL",
     onChange: e => setMe({
@@ -1551,7 +1616,7 @@ function InvoiceMaker() {
       tel: e.target.value
     })
   }), /*#__PURE__*/React.createElement("input", {
-    className: "f",
+    className: me.regNo ? "f" : "f no-print",
     value: me.regNo,
     placeholder: "登録番号",
     onChange: e => setMe({
@@ -1562,14 +1627,14 @@ function InvoiceMaker() {
     style: {
       color: "var(--teal-d)",
       fontSize: 12.5,
-      margin: "16px 0 8px"
+      margin: "11px 0 6px"
     }
   }, "下記のとおりご請求申し上げます。"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
       gap: 8,
-      marginBottom: 10,
+      marginBottom: 7,
       fontSize: 11.5
     }
   }, /*#__PURE__*/React.createElement("span", {
@@ -1588,7 +1653,7 @@ function InvoiceMaker() {
   })), /*#__PURE__*/React.createElement("div", {
     className: "money",
     style: {
-      margin: "0 0 14px"
+      margin: "0 0 10px"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1667,6 +1732,7 @@ function InvoiceMaker() {
   }, /*#__PURE__*/React.createElement("input", {
     className: "f",
     value: me.bank,
+    placeholder: "銀行・支店・口座番号・名義",
     onChange: e => setMe({
       ...me,
       bank: e.target.value
@@ -1798,12 +1864,14 @@ function InvoiceMaker() {
   }, /*#__PURE__*/React.createElement(AutoText, {
     value: it.detail,
     placeholder: "色・ブランド名・特徴",
+    size: dsize,
     onChange: e => setItem(it.id, "detail", e.target.value)
   }))), /*#__PURE__*/React.createElement("td", {
     "data-label": "作業内容"
   }, /*#__PURE__*/React.createElement(AutoText, {
     value: wk.work,
     placeholder: "作業内容",
+    size: dsize,
     onChange: e => setWork(it.id, wk.id, "work", e.target.value)
   })), /*#__PURE__*/React.createElement("td", {
     className: "num",
@@ -1836,7 +1904,7 @@ function InvoiceMaker() {
     style: {
       display: "flex",
       gap: 16,
-      marginTop: 16,
+      marginTop: 10,
       alignItems: "flex-start"
     }
   }, /*#__PURE__*/React.createElement("div", {
